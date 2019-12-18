@@ -14,10 +14,13 @@ class CPU:
         self.register = [None] * 8
         self.instruction_map = {
             0b0001: "HLT",
-            0b0111:"PRN",
+            0b0111: "PRN",
             0b0010: "LDI",
             0b0000:"NOOP",
         }
+        self.alu_map ={
+                0b0010: "MULT"
+                }
         self.filename = filename
 
     def load(self):
@@ -79,7 +82,8 @@ class CPU:
         return operands
 
     def _alu_operand(self,binary):
-        alu = 0b0010000 & binary
+        binary = int(binary,base=2)
+        alu = 0b00100000 & binary
         alu = alu >> 5
         return alu
 
@@ -99,18 +103,24 @@ class CPU:
         ii = None
         while ii != "HLT":
             instruction = self.ram[program_counter]
-            instruction = int(instruction,2)
-            ii = self._instruction_identifier(instruction)
-            ii = self.instruction_map[ii]
-            if ii == "LDI":
-                register = self.ram_read(program_counter+1)
-                immediate = self.ram[program_counter+2]
-                self.register[int(register,base=2)] = immediate
-                program_counter+=2
-            elif ii == "PRN":
-                reg_num= self.ram_read(program_counter+1)
-                register = int(self.register[int(reg_num,base=2)],base=2)
-                print(register)
-            if program_counter>100:
-                break
+            ii = int(instruction,2)
+            ii = self._instruction_identifier(ii)
+            if self._alu_operand(instruction):
+                ii = self.alu_map[ii]
+                if ii == "MULT":
+                    reg_a = int(self.register[0],base=2)
+                    reg_b = int(self.register[1],base=2)
+                    self.register[0] = bin(reg_a*reg_b)
+                    program_counter +=2
+            else:
+                ii = self.instruction_map[ii]
+                if ii == "LDI":
+                    register = self.ram_read(program_counter+1)
+                    immediate = self.ram[program_counter+2]
+                    self.register[int(register,base=2)] = immediate
+                    program_counter+=2
+                elif ii == "PRN":
+                    reg_num= self.ram_read(program_counter+1)
+                    register = int(self.register[int(reg_num,base=2)],base=2)
+                    print(register)
             program_counter +=1
