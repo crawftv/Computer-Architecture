@@ -18,11 +18,13 @@ class CPU:
             0b0000: "CALL",
             0b0110: "POP",
             0b0101: "PUSH",
-            0b0001: "RET"
+            0b0001: "RET",
+            0b0100: "JMP"
         }
         self.alu_map = {
             0b0000: "ADD",
-            0b0010: "MULT"
+            0b0010: "MULT",
+            0b0111: "CMP"
         }
         self.filename = filename
 
@@ -83,6 +85,10 @@ class CPU:
             instruction = "NOOP"
         elif int(binary, base=2) == 1:
             instruction = "HLT"
+        elif int(binary, 2) == 0b01010101:
+            instruction = "JEQ"
+        elif int(binary, 2) == 0b01010110:
+            instruction = "JNE"
         elif self._alu_operand(binary) == True:
             ii = int(binary, 2)
             ii = self._instruction_identifier(ii)
@@ -100,11 +106,17 @@ class CPU:
         self.load()
         program_counter = 0x00
         stack_pointer = self.register[-1]
+        flag = None
         ii = None
-
+        # import pdb
+        # pdb.set_trace()
         while ii != "HLT":
             instruction = self.ram[program_counter]
-            ii = self._instruction_brancher(instruction)
+            try:
+                ii = self._instruction_brancher(instruction)
+            except:
+                import pdb
+                pdb.set_trace()
             if ii == "MULT":
                 reg_a = int(self.register[0], base=2)
                 reg_b = int(self.register[1], base=2)
@@ -115,8 +127,37 @@ class CPU:
                 reg_b = int(self.register[0], base=2)
                 self.register[0] = bin(reg_a+reg_b)
                 program_counter += 3
-            elif ii == "LDI":
+            elif ii == "CMP":
+                reg_a = int(self.register[0], base=2)
+                reg_b = int(self.register[1], base=2)
+                if reg_a < reg_b:
+                    flag = 0b0000100
+                elif reg_a > reg_b:
+                    flag = 0b00000010
+                elif reg_a == reg_b:
+                    flag = 0b00000001
+                program_counter += 3
 
+            elif ii == "JEQ":
+                reg_r = int(self.ram[program_counter+1], base=2)
+                jump_to_address = self.register[reg_r]
+                if flag & 0b00000001:
+                    program_counter = int(jump_to_address, 2)
+                else:
+                    program_counter += 2
+            elif ii == "JNE":
+                reg_r = int(self.ram[program_counter+1], base=2)
+                jump_to_address = self.register[reg_r]
+                if not flag & 0b0000001:
+                    program_counter = int(jump_to_address, 2)
+                else:
+                    program_counter += 2
+
+            elif ii == "JMP":
+                reg_r = int(self.ram[program_counter+1], base=2)
+                jump_to_address = self.register[reg_r]
+                program_counter = int(jump_to_address, 2)
+            elif ii == "LDI":
                 register = int(self.ram[program_counter+1], base=2)
                 immediate = self.ram[program_counter+2]
 
