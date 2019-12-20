@@ -13,14 +13,15 @@ class CPU:
         self.ram = [None] * 256
         self.register = [None] * 7 + [0xf4]
         self.instruction_map = {
-            0b0001: "HLT",
             0b0111: "PRN",
             0b0010: "LDI",
-            0b0000: "NOOP",
+            0b0000: "CALL",
             0b0110: "POP",
-            0b0101: "PUSH"
+            0b0101: "PUSH",
+            0b0001: "RET"
         }
         self.alu_map = {
+            0b0000: "ADD",
             0b0010: "MULT"
         }
         self.filename = filename
@@ -77,78 +78,82 @@ class CPU:
         ii = 0b00001111 & binary
         return ii
 
+    def _instruction_brancher(self, binary):
+        if int(binary, base=2) == 0:
+            instruction = "NOOP"
+        elif int(binary, base=2) == 1:
+            instruction = "HLT"
+        elif self._alu_operand(binary) == True:
+            ii = int(binary, 2)
+            ii = self._instruction_identifier(ii)
+            instruction = self.alu_map[ii]
+        else:
+            ii = int(binary, 2)
+            ii = self._instruction_identifier(ii)
+
+            instruction = self.instruction_map[ii]
+
+        return instruction
+
     def run(self):
         """Run the CPU."""
         self.load()
         program_counter = 0x00
+        stack_pointer = self.register[-1]
         ii = None
+
         while ii != "HLT":
             instruction = self.ram[program_counter]
-            ii = int(instruction, 2)
-            ii = self._instruction_identifier(ii)
-            if self._alu_operand(instruction):
-                ii = self.alu_map[ii]
-                if ii == "MULT":
-                    reg_a = int(self.register[0], base=2)
-                    reg_b = int(self.register[1], base=2)
-                    self.register[0] = bin(reg_a*reg_b)
-                    program_counter += 2
-            else:
-                ii = self.instruction_map[ii]
-                if ii == "LDI":
-                    # import pdb
-                    # pdb.set_trace()
-                    register = int(self.ram[program_counter+1], base=2)
-                    immediate = self.ram[program_counter+2]
+            ii = self._instruction_brancher(instruction)
+            if ii == "MULT":
+                reg_a = int(self.register[0], base=2)
+                reg_b = int(self.register[1], base=2)
+                self.register[0] = bin(reg_a*reg_b)
+                program_counter += 3
+            elif ii == "ADD":
+                reg_a = int(self.register[0], base=2)
+                reg_b = int(self.register[0], base=2)
+                self.register[0] = bin(reg_a+reg_b)
+                program_counter += 3
+            elif ii == "LDI":
 
-                    self.register[register] = immediate
-                    program_counter += 2
+                register = int(self.ram[program_counter+1], base=2)
+                immediate = self.ram[program_counter+2]
 
-                elif ii == "PRN":
-                    reg_num = self.ram_read(program_counter+1)
-                    register = self.register[int(reg_num, base=2)]
+                self.register[register] = immediate
+                program_counter += 3
 
-                    print(int(register, base=2))
+            elif ii == "PRN":
+                reg_num = self.ram_read(program_counter+1)
+                register = self.register[int(reg_num, base=2)]
+                print(int(register, base=2))
+                program_counter += 2
+            elif ii == "PUSH":
+                self.register[-1] += -1
+                reg_num = self.ram_read(program_counter+1)
+                self.ram_write(
+                    self.register[-1],
+                    self.register[int(reg_num, base=2)]
+                )
+                program_counter += 2
+            elif ii == "POP":
 
-                    program_counter += 1
-                elif ii == "PUSH":
-                    self.register[-1] += -1
-                    reg_num = self.ram_read(program_counter+1)
-                    self.ram_write(
-                        self.register[-1],
-                        self.register[int(reg_num, base=2)]
-                    )
+                stack_pointer = self.register[-1]
+                reg_num = int(self.ram_read(program_counter+1), base=2)
 
-                    program_counter += 1
-                elif ii == "POP":
+                self.register[reg_num] = self.ram[stack_pointer]
 
-                    reg_num = int(self.ram_read(program_counter+1), base=2)
-                    stack_pointer = self.register[-1]
+                self.register[-1] += 1
+                program_counter += 2
+            elif ii == "CALL":
 
-                    self.register[reg_num] = self.ram[stack_pointer]
-
-                    self.register[-1] += 1
-                    program_counter += 1
-
-            program_counter += 1
-
-        #    def trace(self):
-    #        """
-    #        Handy function to print out the CPU state. You might want to call this
-    #        from run() if you need help debugging.
-    #        """
-    #
-    #        print(f"TRACE: %02X | %02X %02X %02X |" % (
-    #            self.pc,
-    #            #self.fl,
-    #            #self.ie,
-    #            self.ram_read(self.pc),
-    #            self.ram_read(self.pc + 1),
-    #            self.ram_read(self.pc + 2)
-    #            ),
-    #            end='')
-    #
-    #        for i in range(8):
-    #            print(" %02X" % self.reg[i], end='')
-    #
-    #        print()
+                address_at_register = int(self.register[int(
+                    self.ram[program_counter+1], 2)
+                ], 2)
+                self.ram[stack_pointer] = program_counter+2
+                program_counter = address_at_register
+                self.register[-1] += -1
+            elif ii == "RET":
+                self.register[-1] += 1
+                stack_pointer = self.register[-1]
+                program_counter = self.ram[stack_pointer]
